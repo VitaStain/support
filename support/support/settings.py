@@ -20,6 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
+
 SECRET_KEY = os.environ.get("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -83,7 +84,7 @@ WSGI_APPLICATION = 'support.wsgi.application'
 DATABASES = {
     'default': {
         "ENGINE": os.environ.get("SQL_ENGINE", "django.db.backends.postgresql_psycopg2"),
-        "NAME": os.environ.get("SQL_DATABASE", "django_db"),
+        "NAME": os.environ.get("SQL_DATABASE", "support_db"),
         "USER": os.environ.get("SQL_USER", "admin"),
         "PASSWORD": os.environ.get("SQL_PASSWORD", "admin"),
         "HOST": os.environ.get("SQL_HOST", "127.0.0.1"),
@@ -131,10 +132,14 @@ STATIC_URL = '/static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# REDIS_HOST = 'my-test-redis'
 REDIS_HOST = os.environ.get("REDIS_HOST", 'localhost')
-# REDIS_HOST = 'localhost'
 REDIS_PORT = '6379'
 
 CELERY_BROKER_URL = 'redis://' + REDIS_HOST + ':' + REDIS_PORT + '/0'
-CELERY_RESULT_BACKEND = 'redis://' + REDIS_HOST + ':' + REDIS_PORT + '/1'
+CELERY_RESULT_BACKEND = 'redis://' + REDIS_HOST + ':' + REDIS_PORT + '/0'
+
+EMAIL_HOST = os.environ.get("EMAIL_HOST", 'smtp.inbox.ru')
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", 'some@mail.ru')
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", 'somepassword')
+EMAIL_PORT = os.environ.get("EMAIL_PORT", 587)
+EMAIL_USE_TLS = True

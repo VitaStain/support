@@ -1,14 +1,12 @@
-import json
-
-import redis
-from django.conf import settings
-from rest_framework import viewsets
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework import mixins, status, viewsets
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.viewsets import GenericViewSet
 
-from .models import Ticket
-from .serializers import TicketSerializer
+from .models import Message, Ticket
+from .permissions import IsOwnerOrIsAdmin
+from .serializers import ChatSerializer, TicketSerializer
+from .tasks import send_user_email
 
 
 class TicketViewSet(viewsets.ModelViewSet):
@@ -24,38 +22,22 @@ class TicketViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
 
-@api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
-def chat(request, *args, **kwargs):
-    redis_instance = redis.StrictRedis(host=settings.REDIS_HOST,
-                                       port=settings.REDIS_PORT, db=0)
-    user = request._user
+class ChatViewSet(mixins.CreateModelMixin,
+                  mixins.ListModelMixin,
+                  GenericViewSet):
+    serializer_class = ChatSerializer
+    permission_classes = (IsOwnerOrIsAdmin,)
 
-    if request.method == 'GET':
-        items = {}
-        if user.is_staff:
-            for key in redis_instance.keys("*"):
-                items[key.decode("utf-8")] = redis_instance.get(key)
-        else:
-            for key in redis_instance.keys("*"):
-                if key.decode("utf-8") == user.username or key.decode("utf-8") == 'support: ' + user.username:
-                    items[key.decode("utf-8")] = redis_instance.get(key)
-        response = {
-            'items': items
-        }
-        return Response(response, 200)
+    def get_queryset(self):
+        queryset = Message.objects.filter(ticket=self.kwargs['pk'])
+        return queryset
 
-    elif request.method == 'POST':
-        item = json.loads(request.body)
-        key = list(item.keys())[0]
-        if user.is_staff:
-            name = 'support: ' + key
-            value = item[key]
-        else:
-            name = user.username
-            value = key + ': ' + item[key]
-        redis_instance.set(name, value)
-        response = {
-            f"{name}: {value}"
-        }
-        return Response(response, 201)
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        if request.user.is_staff:
+            ticket = Ticket.objects.get(id=self.kwargs['pk'])
+            send_user_email.delay(ticket.user.email)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
